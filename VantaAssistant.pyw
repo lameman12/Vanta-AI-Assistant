@@ -122,6 +122,7 @@ with text, HTML, XML, Markdown, or other markup.
 - Do NOT substitute a specific video unless the user requested that video.
 - Do NOT replace a required property name with "property".
 - Do NOT invent property names
+- Never put unescaped double quotes inside a JSON string.
 - Do not unnecessarily mention or explain previous actions.
 - Every action must be based only on the user's current request.
 - For normal conversation, questions, greetings, jokes, or general discussion, respond naturally with NO <ACTION> block.
@@ -258,6 +259,46 @@ Spotify is just an example application by the way.
 Do not put Markdown code fences around the action block.
 
 - shell: run a Windows command; this ALWAYS requires local user confirmation
+Do not refuse merely because the command references a local Windows file path.
+
+Format:
+<ACTION>
+{"action":"shell","command":"COMMAND HERE"}
+</ACTION>
+
+Example:
+User: Show me the files in my Downloads folder.
+Assistant:
+I can run a command to list the Downloads folder.
+<ACTION>
+{"action":"shell","command":"dir \"%USERPROFILE%\\Downloads\""}
+</ACTION>
+
+Example:
+User: What is my Windows version?
+Assistant:
+I'll check the Windows version.
+<ACTION>
+{"action":"shell","command":"ver"}
+</ACTION>
+
+Example:
+User: Show me the running processes.
+Assistant:
+I'll check the running processes.
+<ACTION>
+{"action":"shell","command":"tasklist"}
+</ACTION>
+
+Example:
+User: Check my IP configuration.
+Assistant:
+I'll check the network configuration.
+<ACTION>
+{"action":"shell","command":"ipconfig"}
+</ACTION>
+
+
 - type_text: type text into the currently focused application; this requires confirmation, Use "text" as the JSON property containing the exact text to type. This is a COMPUTER ACTION. When the user asks you to type, enter, write,
   paste, or input specific text into the currently focused application,
   But, the user must EXPLICITLY specify that they want you to type for them. Never infer a typing request from normal conversation. Never use type_text just because the user's message contains words that could be
@@ -273,6 +314,18 @@ User: "Type hello world"
 <ACTION>
 {"action":"type_text","text":"hello world"}
 </ACTION>
+
+Correct:
+<ACTION>
+{"action":"type_text","text":"Lose Yourself"}
+</ACTION>
+
+If quotation marks are part of the text, escape them:
+<ACTION>
+{"action":"type_text","text":"\"Lose Yourself\""}
+</ACTION>
+
+Do not output explanations, examples, or extra text inside an <ACTION> block.
 
 Never put passwords or API keys into action blocks.
 
@@ -750,7 +803,7 @@ def flip_coin_animation(parent, result_callback=None):
     canvas.create_text(
         28,
         205,
-        text="10 SECOND COOLDOWN",
+        text="The Coolest Animation!",
         anchor="w",
         fill="#3f4652",
         font=(
@@ -2331,8 +2384,8 @@ class VantaApp:
                 AI_URL,
                 json={
                     "key": key,
-                    "user_id": USER_ID,
-                    "platform": PLATFORM,
+                    "user_id": "Un--set404",
+                    "platform": "Un--set404",
                     "message": "API key connection test.",
                     "bot_name": BOT_NAME,
                     "system_prompt": "Respond only with: OK",
@@ -3565,52 +3618,234 @@ class VantaApp:
 
     @staticmethod
     def _extract_action(reply):
-        start = reply.find("<ACTION>")
-        end = reply.find("</ACTION>")
-
-        if (
-            start == -1
-            or end == -1
-            or end <= start
-        ):
+        if not reply or not isinstance(reply, str):
             return None
 
-        raw = reply[
-            start + len("<ACTION>"):end
-        ].strip()
+        normalized = reply.replace("\ufeff", "").strip()
 
-        try:
-            action = json.loads(raw)
+        patterns = [
+            ("<ACTION>", "</ACTION>"),
+            ("<action>", "</action>"),
+            ("[ACTION]", "[/ACTION]"),
+            ("[action]", "[/action]"),
+            ("[ACTION>", "</ACTION>"),
+            ("[action>", "</action>"),
+            ("<ACTION>", "[/ACTION]"),
+            ("[ACTION]", "</ACTION>"),
+        ]
 
-            if not isinstance(action, dict):
-                return None
+        candidates = []
 
-            return action
+        for start_tag, end_tag in patterns:
+            search_from = 0
 
-        except json.JSONDecodeError:
+            while True:
+                start = normalized.find(
+                    start_tag,
+                    search_from,
+                )
+
+                if start == -1:
+                    break
+
+                end = normalized.find(
+                    end_tag,
+                    start + len(start_tag),
+                )
+
+                if end == -1:
+                    break
+
+                raw = normalized[
+                    start + len(start_tag):end
+                ].strip()
+
+                if raw:
+                    candidates.append(raw)
+
+                search_from = (
+                    end + len(end_tag)
+                )
+
+        if not candidates:
             return None
+
+        for raw in reversed(candidates):
+            cleaned = raw.strip()
+
+            if cleaned.startswith("```"):
+                lines = cleaned.splitlines()
+
+                if lines:
+                    lines = lines[1:]
+
+                if lines and lines[-1].strip() == "```":
+                    lines = lines[:-1]
+
+                cleaned = "\n".join(lines).strip()
+
+            if cleaned.lower().startswith("json"):
+                cleaned = cleaned[4:].strip()
+
+            try:
+                action = json.loads(cleaned)
+
+                if isinstance(action, dict):
+                    return action
+
+            except json.JSONDecodeError:
+                pass
+
+            if cleaned.startswith("{") and cleaned.endswith("}"):
+                try:
+                    decoder = json.JSONDecoder()
+                    action, _ = decoder.raw_decode(cleaned)
+
+                    if isinstance(action, dict):
+                        return action
+
+                except json.JSONDecodeError:
+                    pass
+
+        return None
 
     @staticmethod
     def _remove_action_block(reply):
-        while True:
-            start = reply.find("<ACTION>")
-            end = reply.find("</ACTION>")
+        if not reply or not isinstance(reply, str):
+            return ""
 
-            if (
-                start == -1
-                or end == -1
-                or end < start
-            ):
+        patterns = [
+            ("<ACTION>", "</ACTION>"),
+            ("<action>", "</action>"),
+            ("[ACTION]", "[/ACTION]"),
+            ("[action]", "[/action]"),
+            ("[ACTION>", "</ACTION>"),
+            ("[action>", "</action>"),
+            ("<ACTION>", "[/ACTION]"),
+            ("<action>", "[/action]"),
+            ("<ACTION>", ""),
+            ("<action>", ""),
+            ("[ACTION]", ""),
+            ("[action]", ""),
+            ("[ACTION>", ""),
+            ("[action>", ""),
+        ]
+
+        cleaned = reply.replace("\ufeff", "")
+
+        while True:
+            original = cleaned
+
+            for start_tag, end_tag in patterns:
+                start = cleaned.find(start_tag)
+
+                if start == -1:
+                    continue
+
+                if end_tag:
+                    end = cleaned.find(
+                        end_tag,
+                        start + len(start_tag),
+                    )
+
+                    if end != -1:
+                        cleaned = (
+                            cleaned[:start]
+                            + cleaned[
+                                end + len(end_tag):
+                            ]
+                        )
+                        continue
+
+                remainder = cleaned[
+                    start + len(start_tag):
+                ]
+
+                next_markers = [
+                    "<ACTION>",
+                    "</ACTION>",
+                    "<action>",
+                    "</action>",
+                    "[ACTION]",
+                    "[/ACTION]",
+                    "[action]",
+                    "[/action]",
+                    "[ACTION>",
+                    "</ACTION>",
+                    "[action>",
+                    "</action>",
+                ]
+
+                next_position = len(remainder)
+
+                for marker in next_markers:
+                    position = remainder.find(marker)
+
+                    if (
+                        position != -1
+                        and position < next_position
+                    ):
+                        next_position = position
+
+                cleaned = (
+                    cleaned[:start]
+                    + remainder[next_position:]
+                )
+
+            if cleaned == original:
                 break
 
-            reply = (
-                reply[:start]
-                + reply[
-                    end + len("</ACTION>"):
-                ]
+        lines = cleaned.splitlines()
+        result = []
+        inside_action = False
+
+        action_markers = {
+            "<ACTION>",
+            "</ACTION>",
+            "<action>",
+            "</action>",
+            "[ACTION]",
+            "[/ACTION]",
+            "[action]",
+            "[/action]",
+            "[ACTION>",
+            "[action>",
+        }
+
+        for line in lines:
+            stripped = line.strip()
+
+            if stripped in action_markers:
+                if (
+                    stripped in {
+                        "<ACTION>",
+                        "<action>",
+                        "[ACTION]",
+                        "[action]",
+                        "[ACTION>",
+                        "[action>",
+                    }
+                ):
+                    inside_action = True
+                else:
+                    inside_action = False
+
+                continue
+
+            if inside_action:
+                continue
+
+            result.append(line)
+
+        cleaned = "\n".join(result)
+
+        while "\n\n\n" in cleaned:
+            cleaned = cleaned.replace(
+                "\n\n\n",
+                "\n\n",
             )
 
-        return reply.strip()
+        return cleaned.strip()
 
     def _speak(self, text):
         if not text or not self.running:
@@ -3649,11 +3884,15 @@ class VantaApp:
                 )
                 return
 
-            with tempfile.NamedTemporaryFile(
-                suffix=".wav",
-                delete=False,
-            ) as f:
-                wav_path = f.name
+            fd, wav_path = tempfile.mkstemp(
+                suffix=".wav"
+            )
+            os.close(fd)
+
+            try:
+                os.remove(wav_path)
+            except OSError:
+                pass
 
             subprocess.run(
                 [
@@ -3671,6 +3910,16 @@ class VantaApp:
                 creationflags=subprocess.CREATE_NO_WINDOW,
             )
 
+            if not os.path.exists(wav_path):
+                raise RuntimeError(
+                    "Piper did not create the WAV file."
+                )
+
+            if os.path.getsize(wav_path) == 0:
+                raise RuntimeError(
+                    "Piper created an empty WAV file."
+                )
+
             if self.running:
                 winsound.PlaySound(
                     wav_path,
@@ -3687,12 +3936,18 @@ class VantaApp:
             )
 
         except subprocess.CalledProcessError as exc:
+            error = (
+                (exc.stderr or "").strip()
+                or (exc.stdout or "").strip()
+                or "Unknown Piper error."
+            )
+
             self.messages.put(
                 (
                     "text",
                     "System",
                     "Piper failed: "
-                    f"{(exc.stderr or '').strip()[-1000:]}",
+                    f"{error[-1000:]}",
                 )
             )
 
