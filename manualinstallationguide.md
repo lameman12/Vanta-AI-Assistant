@@ -332,39 +332,7 @@ ALL VANTA IMPORTS OK
 
 ---
 
-## 10. Locate the Vanta Source Folder
-
-Find the folder containing:
-
-```text
-VantaAssistant.pyw
-```
-
-Open Command Prompt.
-
-Use:
-
-```bat
-cd "PATH\TO\VANTA"
-```
-
-Replace:
-
-```text
-PATH\TO\VANTA
-```
-
-with the actual folder containing the Vanta source code.
-
-Example:
-
-```bat
-cd "C:\Vanta"
-```
-
----
-
-## 11. Check That VantaAssistant.pyw Exists
+## 10. Check That VantaAssistant.pyw Exists
 
 Run:
 
@@ -404,7 +372,7 @@ to enter the correct directory.
 
 ---
 
-## 12. Run Vanta Assistant
+## 11. Run Vanta Assistant
 
 Run:
 
@@ -424,7 +392,7 @@ ensures that Python 3.11 is being used.
 
 ---
 
-## 13. Check the Exact Python Vanta Uses
+## 12. Check the Exact Python Vanta Uses
 
 Run:
 
@@ -436,7 +404,7 @@ The output should show Python 3.11.
 
 ---
 
-## 14. Check Installed Packages
+## 13. Check Installed Packages
 
 Run:
 
@@ -460,7 +428,7 @@ Package versions may differ.
 
 ---
 
-## 15. Check Individual Packages
+## 14. Check Individual Packages
 
 Check Faster-Whisper:
 
@@ -500,7 +468,7 @@ py -3.11 -m pip show pyperclip
 
 ---
 
-## 16. If a Package Is Missing
+## 15. If a Package Is Missing
 
 Install it with:
 
@@ -516,7 +484,7 @@ py -3.11 -m pip install --upgrade pyautogui
 
 ---
 
-## 17. If Python 3.11 Is Not Found
+## 16. If Python 3.11 Is Not Found
 
 Run:
 
@@ -548,7 +516,7 @@ py -3.11 --version
 
 ---
 
-## 18. If `python` Shows Python 3.12
+## 17. If `python` Shows Python 3.12
 
 If:
 
@@ -586,7 +554,7 @@ py -3.11 VantaAssistant.pyw
 
 ---
 
-## 19. If pip Is Not Recognized
+## 18. If pip Is Not Recognized
 
 Do not rely on:
 
@@ -608,7 +576,7 @@ py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pyca
 
 ---
 
-## 20. Troubleshooting Faster-Whisper
+## 19. Troubleshooting Faster-Whisper
 
 Upgrade Faster-Whisper:
 
@@ -630,7 +598,7 @@ Faster-Whisper OK
 
 ---
 
-## 21. Troubleshooting SoundDevice
+## 20. Troubleshooting SoundDevice
 
 Reinstall SoundDevice:
 
@@ -648,7 +616,7 @@ This should display the available audio devices.
 
 ---
 
-## 22. Troubleshooting Pycaw
+## 21. Troubleshooting Pycaw
 
 Reinstall Pycaw:
 
@@ -670,7 +638,7 @@ Pycaw OK
 
 ---
 
-## 23. Troubleshooting PyAutoGUI
+## 22. Troubleshooting PyAutoGUI
 
 Reinstall PyAutoGUI:
 
@@ -692,7 +660,7 @@ PyAutoGUI OK
 
 ---
 
-## 24. Troubleshooting Pyperclip
+## 23. Troubleshooting Pyperclip
 
 Reinstall Pyperclip:
 
@@ -714,7 +682,7 @@ Pyperclip OK
 
 ---
 
-## 25. Reinstall All Third-Party Dependencies
+## 24. Reinstall All Third-Party Dependencies
 
 If the Python environment becomes corrupted or packages are missing, run:
 
@@ -736,7 +704,7 @@ ALL THIRD-PARTY PACKAGES OK
 
 ---
 
-## 26. Complete Environment Verification
+## 25. Complete Environment Verification
 
 Run:
 
@@ -750,133 +718,6 @@ A successful result should contain:
 VANTA ENVIRONMENT READY
 Python: 3.11...
 Executable: ...
-```
-
----
-
-# PyInstaller
-
-## 27. Install PyInstaller
-
-To create a Windows EXE, install PyInstaller:
-
-```bat
-py -3.11 -m pip install --upgrade pyinstaller
-```
-
-Check the installed version:
-
-```bat
-py -3.11 -m PyInstaller --version
-```
-
----
-
-## 28. Prepare the Vanta Folder
-
-The source folder should contain:
-
-```text
-VantaAssistant.pyw
-vantaicon.ico
-```
-
-Make sure the icon is a valid Windows `.ico` file.
-
----
-
-## 29. Build a Normal Windowed EXE
-
-Open Command Prompt in the folder containing the source file.
-
-Run:
-
-```bat
-py -3.11 -m PyInstaller --clean --noconfirm --onefile --windowed --icon="vantaicon.ico" --name="VantaAssistant" "VantaAssistant.pyw"
-```
-
-The normal PyInstaller output will be placed in the `dist` directory.
-
-The executable will be:
-
-```text
-dist\VantaAssistant.exe
-```
-
----
-
-## 30. Build the EXE Directly Into the Current Folder
-
-If the executable should be placed directly beside the Python source file, run:
-
-```bat
-py -3.11 -m PyInstaller --clean --noconfirm --onefile --windowed --icon="vantaicon.ico" --name="VantaAssistant" --distpath="." "VantaAssistant.pyw"
-```
-
-The result will be:
-
-```text
-VantaAssistant.exe
-```
-
----
-
-## 31. Remove the Spec File
-
-PyInstaller normally generates a `.spec` file.
-
-If it is not needed, delete it after the build:
-
-```bat
-del /q VantaAssistant.spec
-```
-
-The EXE itself is unaffected.
-
----
-
-## 32. Remove Old Build Files
-
-Before rebuilding, you can remove previous PyInstaller output:
-
-```bat
-rmdir /s /q build
-rmdir /s /q dist
-del /q VantaAssistant.spec
-```
-
-If a file or folder does not exist, Windows may report an error. That is harmless.
-
-Then rebuild:
-
-```bat
-py -3.11 -m PyInstaller --clean --noconfirm --onefile --windowed --icon="vantaicon.ico" --name="VantaAssistant" --distpath="." "VantaAssistant.pyw"
-```
-
----
-
-## 33. Debug an EXE That Immediately Closes
-
-A `--windowed` build does not provide a console window.
-
-For troubleshooting, temporarily create a console-enabled build:
-
-```bat
-py -3.11 -m PyInstaller --clean --noconfirm --onefile --console --icon="vantaicon.ico" --name="VantaAssistantDebug" "VantaAssistant.pyw"
-```
-
-Run:
-
-```bat
-VantaAssistantDebug.exe
-```
-
-Any Python exception should appear in the Command Prompt.
-
-After fixing the problem, build the normal version again:
-
-```bat
-py -3.11 -m PyInstaller --clean --noconfirm --onefile --windowed --icon="vantaicon.ico" --name="VantaAssistant" --distpath="." "VantaAssistant.pyw"
 ```
 
 ---
@@ -919,37 +760,6 @@ py -3.11 -c "import json, os, queue, difflib, shutil, subprocess, tempfile, thre
 py -3.11 VantaAssistant.pyw
 ```
 
-## Install PyInstaller
-
-```bat
-py -3.11 -m pip install --upgrade pyinstaller
-```
-
-## Build VantaAssistant.exe
-
-```bat
-py -3.11 -m PyInstaller --clean --noconfirm --onefile --windowed --icon="vantaicon.ico" --name="VantaAssistant" --distpath="." "VantaAssistant.pyw"
-```
-
----
-
-# Final Project Structure
-
-After a successful build, the important files can be:
-
-```text
-Vanta/
-├── VantaAssistant.pyw
-├── vantaicon.ico
-└── VantaAssistant.exe
-```
-
-The `.pyw` file is the Python source.
-
-The `.ico` file is the application icon.
-
-The `.exe` file is the packaged Windows application.
-
 ---
 
 # Quick Start
@@ -960,23 +770,4 @@ For a fresh Python 3.11 installation:
 py -3.11 -m pip install --upgrade pip
 py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip
 py -3.11 -c "import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; print('ALL VANTA IMPORTS OK')"
-```
-
-Run Vanta:
-
-```bat
-py -3.11 VantaAssistant.pyw
-```
-
-Build the EXE:
-
-```bat
-py -3.11 -m pip install --upgrade pyinstaller
-py -3.11 -m PyInstaller --clean --noconfirm --onefile --windowed --icon="vantaicon.ico" --name="VantaAssistant" --distpath="." "VantaAssistant.pyw"
-```
-
-The final executable is:
-
-```text
-VantaAssistant.exe
 ```
