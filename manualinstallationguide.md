@@ -7,7 +7,7 @@ This includes the requirements, installation steps and troubleshooting when down
 * Windows 10 or Windows 11
 * 64-bit Windows
 * Internet connection
-* Python 3.11
+* Python 3.11 or Python 3.12 (64-bit)
 * Vanta Assistant source code
 
 ---
