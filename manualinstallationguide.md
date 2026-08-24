@@ -843,13 +843,13 @@ python -m pip install --upgrade pip
 ## Install Vanta Dependencies
 
 ```bat
-python -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
+py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
 ```
 
 or: 
 
 ```bat
-py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
+python -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
 ```
 
 ## Verify Imports
