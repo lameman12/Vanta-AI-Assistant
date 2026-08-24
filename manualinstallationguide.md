@@ -113,7 +113,7 @@ Wait for it to finish.
 Run:
 
 ```bat
-py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip
+py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
 ```
 
 This installs:
@@ -126,6 +126,7 @@ faster-whisper
 pycaw
 pyautogui
 pyperclip
+Pillow
 ```
 
 ---
@@ -594,7 +595,7 @@ py -3.11 -m pip install ...
 For example:
 
 ```bat
-py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip
+py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
 ```
 
 ---
