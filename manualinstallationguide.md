@@ -1,6 +1,7 @@
 # Manual Installation Guide - Vanta
 
 This includes the requirements, installation steps and troubleshooting when downloading Vanta.
+(Use python -m / python -c if normal commands beginning with 'py -3.11' say py is not recognised)
 
 ## Requirements
 
@@ -348,6 +349,12 @@ Run:
 py -3.11 -c "import json, os, queue, difflib, shutil, subprocess, tempfile, threading, random, time, tkinter, tkinter.messagebox, webbrowser, math, winsound, getpass, urllib.request, uuid; from pathlib import Path; from datetime import datetime; import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; print('ALL VANTA IMPORTS OK')"
 ```
 
+or: 
+
+```bat
+python -c "import json, os, queue, difflib, shutil, subprocess, tempfile, threading, random, time, tkinter, tkinter.messagebox, webbrowser, math, winsound, getpass, urllib.request, uuid; from pathlib import Path; from datetime import datetime; import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; print('ALL VANTA IMPORTS OK')"
+```
+
 A successful result is:
 
 ```text
@@ -422,6 +429,12 @@ Run:
 
 ```bat
 py -3.11 -c "import sys; print('Python version:', sys.version); print('Python executable:', sys.executable)"
+```
+
+or:
+
+```bat
+python -c "import sys; print(sys.version); print(sys.executable)"
 ```
 
 The output should show Python 3.11.
@@ -570,6 +583,12 @@ Install packages using:
 py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip
 ```
 
+or:
+
+```bat
+python -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
+```
+
 Run Vanta using:
 
 ```bat
@@ -596,6 +615,12 @@ For example:
 
 ```bat
 py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
+```
+
+or:
+
+```bat
+python -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
 ```
 
 ---
@@ -736,10 +761,22 @@ If the Python environment becomes corrupted or packages are missing, run:
 py -3.11 -m pip install --upgrade --force-reinstall numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip
 ```
 
+or:
+
+```bat
+python -m pip install --upgrade --force-reinstall numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
+```
+
 Then verify:
 
 ```bat
-py -3.11 -c "import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; print('ALL THIRD-PARTY PACKAGES OK')"
+py -3.11 -c "import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; print('ALL THIRD-PARTY PACKAGES OK')"
+```
+
+or:
+
+```bat
+python -c "import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; print('ALL THIRD-PARTY PACKAGES OK')"
 ```
 
 Expected:
@@ -756,6 +793,12 @@ Run:
 
 ```bat
 py -3.11 -c "import json, os, queue, difflib, shutil, subprocess, tempfile, threading, random, time, tkinter, tkinter.messagebox, webbrowser, math, winsound, getpass, urllib.request, uuid; from pathlib import Path; from datetime import datetime; import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; import sys; print('VANTA ENVIRONMENT READY'); print('Python:', sys.version); print('Executable:', sys.executable)"
+```
+
+or:
+
+```bat
+python -c "import json, os, queue, difflib, shutil, subprocess, tempfile, threading, random, time, tkinter, tkinter.messagebox, webbrowser, math, winsound, getpass, urllib.request, uuid; from pathlib import Path; from datetime import datetime; import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; import sys; print('VANTA ENVIRONMENT READY'); print('Python:', sys.version); print('Executable:', sys.executable)"
 ```
 
 A successful result should contain:
@@ -788,7 +831,20 @@ py -3.11 -c "import sys; print(sys.executable)"
 py -3.11 -m pip install --upgrade pip
 ```
 
+or:
+
+```bat
+python -m pip install --upgrade pip
+```
+
+
 ## Install Vanta Dependencies
+
+```bat
+python -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
+```
+
+or: 
 
 ```bat
 py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
@@ -799,6 +855,13 @@ py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pyca
 ```bat
 py -3.11 -c "import json, os, queue, difflib, shutil, subprocess, tempfile, threading, random, time, tkinter, tkinter.messagebox, webbrowser, math, winsound, getpass, urllib.request, uuid; from pathlib import Path; from datetime import datetime; import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; print('ALL VANTA IMPORTS OK')"
 ```
+
+or:
+
+```bat
+python -c "import json, os, queue, difflib, shutil, subprocess, tempfile, threading, random, time, tkinter, tkinter.messagebox, webbrowser, math, winsound, getpass, urllib.request, uuid; from pathlib import Path; from datetime import datetime; import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; print('ALL VANTA IMPORTS OK')"
+```
+
 
 ## Run Vanta
 
@@ -816,4 +879,12 @@ For a fresh Python 3.11 installation:
 py -3.11 -m pip install --upgrade pip
 py -3.11 -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
 py -3.11 -c "import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; print('ALL VANTA IMPORTS OK')"
+```
+
+or:
+
+```bat
+python -m pip install --upgrade pip
+python -m pip install --upgrade numpy requests sounddevice faster-whisper pycaw pyautogui pyperclip Pillow
+python -c "import numpy, requests, sounddevice, faster_whisper, pycaw.pycaw, pyautogui, pyperclip; from PIL import Image, ImageTk; print('ALL VANTA IMPORTS OK')"
 ```
