@@ -2,7 +2,7 @@
 
 This includes the requirements, installation steps and troubleshooting when downloading Vanta.
 
-(Use python -m / python -c if normal commands beginning with 'py -3.11' say py is not recognised)
+(Use the alternative python -m / python -c commands if normal commands beginning with 'py -3.11' say py is not recognised)
 
 
 ## Requirements
