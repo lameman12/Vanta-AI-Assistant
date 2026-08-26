@@ -1,5 +1,7 @@
 # Manual Installation Guide - Vanta
 
+> **TIP:** You can download Vanta much easier by using the: [Automatic Installer](https://github.com/lameman12/Vanta-AI-Assistant/releases/download/Installer/VantaInstaller.exe).
+
 This includes the requirements, installation steps and troubleshooting when downloading Vanta.
 
 (Use the alternative python -m / python -c commands if normal commands beginning with 'py -3.11' say py is not recognised)
