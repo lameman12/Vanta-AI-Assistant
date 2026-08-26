@@ -4,6 +4,8 @@ Music by Alexander Blu
 Source: [Orange Free Sounds](https://orangefreesounds.com/)  
 License: [Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)](https://creativecommons.org/licenses/by-nc/4.0/)
 
+All listed music remains the property of its respective copyright holder(s). The music is used in Vanta under the terms of the CC BY-NC 4.0 license. Vanta does not claim ownership of these musical works.
+
 ## Tracks
 
 - **Groovy Hip Hop:** https://orangefreesounds.com/jiggy-groovy-hip-hop-music/
