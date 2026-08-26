@@ -28,9 +28,9 @@ import sys
 import numpy as np
 import requests
 import sounddevice as sd
-from faster_whisper import WhisperModel
 
 AI_URL = "https://evil-poppy-hardiness.ngrok-free.dev/chat"
+TRANSCRIBE_URL = "https://evil-poppy-hardiness.ngrok-free.dev/transcribe"
 
 APP_DATA_DIR = (
     Path.home()
@@ -91,10 +91,6 @@ PIPER_MODEL_NAME = "en_GB-alan-medium.onnx"
 SAMPLE_RATE = 16000
 CHANNELS = 1
 BLOCK_SECONDS = 0.25
-
-WHISPER_MODEL = "base.en"
-WHISPER_DEVICE = "cpu"
-WHISPER_COMPUTE_TYPE = "int8"
 
 ENERGY_THRESHOLD = 0.012
 START_SPEECH_BLOCKS = 2
@@ -3233,7 +3229,6 @@ class VantaApp:
         self.drag_y = 0
         self.piper_path = None
         self.voice_model = None
-        self.whisper = None
         self.music_process = None
         self.music_temp_file = None
         self.music_cleanup_thread = None
@@ -3272,27 +3267,82 @@ class VantaApp:
 
 
     def _transcribe(self, audio):
-        if (
-            self.mic_muted
-            or self.whisper is None
-        ):
-            return ""
-
-        segments, _info = self.whisper.transcribe(
-            audio,
-            beam_size=5,
-            vad_filter=True,
-        )
-
         if self.mic_muted:
             return ""
 
-        return " ".join(
-            segment.text.strip()
-            for segment in segments
-            if segment.text.strip()
-        ).strip()
+        try:
+            import io
+            import wave
 
+            audio_array = np.asarray(audio)
+
+            if audio_array.size == 0:
+                return ""
+
+            audio_array = np.clip(
+                audio_array,
+                -1.0,
+                1.0
+            )
+
+            audio_int16 = (
+                audio_array * 32767
+            ).astype(np.int16)
+
+            wav_buffer = io.BytesIO()
+
+            with wave.open(wav_buffer, "wb") as wav_file:
+                wav_file.setnchannels(CHANNELS)
+                wav_file.setsampwidth(2)
+                wav_file.setframerate(SAMPLE_RATE)
+                wav_file.writeframes(
+                    audio_int16.tobytes()
+                )
+
+            wav_buffer.seek(0)
+
+            response = requests.post(
+                TRANSCRIBE_URL,
+                files={
+                    "audio": (
+                        "vanta_audio.wav",
+                        wav_buffer,
+                        "audio/wav"
+                    )
+                },
+                data={
+                    "key": self.api_key
+                },
+                timeout=120
+            )
+
+            if not response.ok:
+                raise RuntimeError(
+                    f"Transcription server returned "
+                    f"HTTP {response.status_code}: "
+                    f"{response.text[:1000]}"
+                )
+
+            data = response.json()
+
+            text = str(
+                data.get("text") or ""
+            ).strip()
+
+            if self.mic_muted:
+                return ""
+
+            return text
+
+        except Exception as exc:
+            self.messages.put(
+                (
+                    "text",
+                    "System",
+                    f"Transcription failed: {exc}"
+                )
+            )
+            return ""
 
     def cleanup_music_file(self):
         with self.music_lock:
@@ -3817,100 +3867,77 @@ class VantaApp:
 
         return "Vanta silent mode disabled."
 
-    def install_piper(self):
-        self.messages.put(
-            (
-                "state",
-                "Installing Piper...",
-            )
-        )
-
-        try:
-            result = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "pip",
-                    "install",
-                    "--upgrade",
-                    "piper-tts",
-                ],
-                capture_output=True,
-                text=True,
-                timeout=300,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-
-            if result.returncode != 0:
-                error = (
-                    (result.stderr or "").strip()
-                    or "Unknown pip error."
-                )
-
-                self.messages.put(
-                    (
-                        "text",
-                        "System",
-                        f"Piper installation failed: {error[-1000:]}",
-                    )
-                )
-
-                return False
-
-            piper = find_piper()
-
-            if not piper:
-                self.messages.put(
-                    (
-                        "text",
-                        "System",
-                        "Piper installed but could not be found.",
-                    )
-                )
-
-                return False
-
-            self.piper_path = piper
-
-            self.messages.put(
-                (
-                    "state",
-                    "Piper installed.",
-                )
-            )
-
-            self.messages.put(
-                (
-                    "text",
-                    "System",
-                    "Piper installation complete. Restart Vanta to enable voice features.",
-                )
-            )
-
-            return True
-
-        except Exception as exc:
-            self.messages.put(
-                (
-                    "text",
-                    "System",
-                    f"Piper install failed: {exc}",
-                )
-            )
-
-            return False
-
     def load_api_key(self):
+        candidates = []
+
         try:
-            if not API_KEY_FILE.exists():
-                return ""
-
-            return API_KEY_FILE.read_text(
-                encoding="utf-8"
-            ).strip()
-
+            candidates.append(API_KEY_FILE)
         except Exception:
-            return ""
+            pass
+
+        try:
+            candidates.append(
+                Path(sys.executable).resolve().parent / "api_key.txt"
+            )
+        except Exception:
+            pass
+
+        try:
+            candidates.append(
+                Path(__file__).resolve().parent / "api_key.txt"
+            )
+        except Exception:
+            pass
+
+        try:
+            candidates.append(
+                Path.home() / "AppData" / "Local" / "Vanta" / "api_key.txt"
+            )
+        except Exception:
+            pass
+
+        try:
+            candidates.append(
+                Path.home() / "AppData" / "Roaming" / "Vanta" / "api_key.txt"
+            )
+        except Exception:
+            pass
+
+        seen = set()
+
+        for candidate in candidates:
+            try:
+                candidate = Path(candidate).expanduser().resolve()
+                key = str(candidate).lower()
+
+                if key in seen:
+                    continue
+
+                seen.add(key)
+
+                if not candidate.is_file():
+                    continue
+
+                value = candidate.read_text(
+                    encoding="utf-8-sig"
+                ).strip()
+
+                if value:
+                    self.messages.put(
+                        (
+                            "text",
+                            "System",
+                            f"API key loaded from {candidate}",
+                        )
+                    )
+                    return value
+
+            except (OSError, UnicodeError, ValueError):
+                continue
+            except Exception:
+                continue
+
+        return ""
 
     def save_api_key(self, key):
         APP_DATA_DIR.mkdir(
@@ -3976,6 +4003,47 @@ class VantaApp:
 
         drag_x = 0
         drag_y = 0
+        closed = False
+
+        def close_window():
+            nonlocal closed
+
+            if closed:
+                return
+
+            closed = True
+
+            try:
+                window.grab_release()
+            except tk.TclError:
+                pass
+
+            try:
+                window.attributes("-topmost", False)
+            except tk.TclError:
+                pass
+
+            try:
+                window.destroy()
+            except tk.TclError:
+                pass
+
+            try:
+                self.root.quit()
+            except tk.TclError:
+                pass
+
+            try:
+                self.root.destroy()
+            except tk.TclError:
+                pass
+
+            os._exit(0)
+
+        window.protocol(
+            "WM_DELETE_WINDOW",
+            close_window,
+        )
 
         def start_drag(event):
             nonlocal drag_x, drag_y
@@ -3984,34 +4052,44 @@ class VantaApp:
                 event.x_root
                 - window.winfo_x()
             )
+
             drag_y = (
                 event.y_root
                 - window.winfo_y()
             )
 
         def drag_window(event):
+            if closed:
+                return
+
             x = event.x_root - drag_x
             y = event.y_root - drag_y
 
-            window.geometry(
-                f"440x270+{x}+{y}"
-            )
+            try:
+                window.geometry(
+                    f"440x270+{x}+{y}"
+                )
+            except tk.TclError:
+                pass
 
         titlebar = tk.Frame(
             window,
             bg="#0D1713",
             height=44,
         )
+
         titlebar.pack(
             fill="x",
             side="top",
         )
+
         titlebar.pack_propagate(False)
 
         titlebar.bind(
             "<ButtonPress-1>",
             start_drag,
         )
+
         titlebar.bind(
             "<B1-Motion>",
             drag_window,
@@ -4022,8 +4100,13 @@ class VantaApp:
             text="⌬",
             fg="#5CFF9D",
             bg="#0D1713",
-            font=("Segoe UI Symbol", 15, "bold"),
+            font=(
+                "Segoe UI Symbol",
+                15,
+                "bold",
+            ),
         )
+
         icon.pack(
             side="left",
             padx=(14, 7),
@@ -4033,27 +4116,34 @@ class VantaApp:
             "<ButtonPress-1>",
             start_drag,
         )
+
         icon.bind(
             "<B1-Motion>",
             drag_window,
         )
 
-        title = tk.Label(
+        titlebar_label = tk.Label(
             titlebar,
             text="VANTA",
             fg="#F2F6FF",
             bg="#0D1713",
-            font=("Segoe UI", 10, "bold"),
+            font=(
+                "Segoe UI",
+                10,
+                "bold",
+            ),
         )
-        title.pack(
+
+        titlebar_label.pack(
             side="left",
         )
 
-        title.bind(
+        titlebar_label.bind(
             "<ButtonPress-1>",
             start_drag,
         )
-        title.bind(
+
+        titlebar_label.bind(
             "<B1-Motion>",
             drag_window,
         )
@@ -4061,17 +4151,21 @@ class VantaApp:
         close_button = tk.Button(
             titlebar,
             text="×",
-            command=window.destroy,
+            command=close_window,
             fg="#B9C2D0",
             bg="#0D1713",
             activeforeground="white",
             activebackground="#C43F52",
             borderwidth=0,
             highlightthickness=0,
-            font=("Segoe UI", 15),
+            font=(
+                "Segoe UI",
+                15,
+            ),
             width=3,
             cursor="hand2",
         )
+
         close_button.pack(
             side="right",
             fill="y",
@@ -4081,19 +4175,25 @@ class VantaApp:
             window,
             bg="#0B0E14",
         )
+
         body.pack(
             fill="both",
             expand=True,
         )
 
-        title = tk.Label(
+        title_label = tk.Label(
             body,
             text="Enter API Key",
             fg="#F2F6FF",
             bg="#0B0E14",
-            font=("Segoe UI", 17, "bold"),
+            font=(
+                "Segoe UI",
+                17,
+                "bold",
+            ),
         )
-        title.pack(
+
+        title_label.pack(
             pady=(25, 5),
         )
 
@@ -4102,8 +4202,12 @@ class VantaApp:
             text="Enter your Vanta API key to continue.",
             fg="#8290A8",
             bg="#0B0E14",
-            font=("Segoe UI", 9),
+            font=(
+                "Segoe UI",
+                9,
+            ),
         )
+
         description.pack(
             pady=(0, 16),
         )
@@ -4112,6 +4216,7 @@ class VantaApp:
             body,
             bg="#121A16",
         )
+
         entry_frame.pack(
             fill="x",
             padx=28,
@@ -4125,8 +4230,12 @@ class VantaApp:
             insertbackground="white",
             relief="flat",
             borderwidth=0,
-            font=("Segoe UI", 10),
+            font=(
+                "Segoe UI",
+                10,
+            ),
         )
+
         entry.pack(
             fill="x",
             padx=12,
@@ -4138,13 +4247,20 @@ class VantaApp:
             text="",
             fg="#8290A8",
             bg="#0B0E14",
-            font=("Segoe UI", 9),
+            font=(
+                "Segoe UI",
+                9,
+            ),
         )
+
         status.pack(
             pady=(10, 5),
         )
 
         def check_key():
+            if closed:
+                return
+
             key = entry.get().strip()
 
             if not key:
@@ -4161,15 +4277,24 @@ class VantaApp:
 
             window.update_idletasks()
 
-            valid, message = self.test_api_key(
-                key
-            )
+            try:
+                valid, message = self.test_api_key(
+                    key
+                )
+            except Exception as exc:
+                valid = False
+                message = str(exc)
+
+            if closed:
+                return
 
             if valid:
                 self.api_key = key
 
                 try:
-                    self.save_api_key(key)
+                    self.save_api_key(
+                        key
+                    )
                 except Exception as exc:
                     status.configure(
                         text=(
@@ -4186,9 +4311,30 @@ class VantaApp:
                 )
 
                 def finish():
-                    window.destroy()
-                    self.set_mic(False)
-                    self.root.deiconify()
+                    if closed:
+                        return
+
+                    try:
+                        window.grab_release()
+                    except tk.TclError:
+                        pass
+
+                    try:
+                        window.destroy()
+                    except tk.TclError:
+                        pass
+
+                    try:
+                        self.set_mic(
+                            False
+                        )
+                    except Exception:
+                        pass
+
+                    try:
+                        self.root.deiconify()
+                    except tk.TclError:
+                        pass
 
                 window.after(
                     700,
@@ -4197,7 +4343,10 @@ class VantaApp:
 
             else:
                 status.configure(
-                    text=message,
+                    text=(
+                        message
+                        or "Invalid API key."
+                    ),
                     fg="#FF6B7A",
                 )
 
@@ -4210,12 +4359,18 @@ class VantaApp:
             activeforeground="#071019",
             activebackground="#32CD32",
             borderwidth=0,
+            highlightthickness=0,
             relief="flat",
             padx=18,
             pady=8,
             cursor="hand2",
-            font=("Segoe UI", 9, "bold"),
+            font=(
+                "Segoe UI",
+                9,
+                "bold",
+            ),
         )
+
         button.pack(
             pady=(2, 10),
         )
@@ -4917,30 +5072,6 @@ class VantaApp:
             
 
     def load_audio_systems(self):
-        try:
-            self.messages.put(
-                ("state", "Loading Whisper…")
-            )
-
-            self.whisper = WhisperModel(
-                WHISPER_MODEL,
-                device=WHISPER_DEVICE,
-                compute_type=WHISPER_COMPUTE_TYPE,
-            )
-
-        except Exception as exc:
-            self.messages.put(
-                ("state", "Whisper failed")
-            )
-            self.messages.put(
-                (
-                    "text",
-                    "System",
-                    f"Whisper could not load: {exc}",
-                )
-            )
-            return
-
         if not self.running:
             return
 
@@ -4952,10 +5083,17 @@ class VantaApp:
             self.piper_path = find_piper()
 
             if not self.piper_path:
-                threading.Thread(
-                    target=self.install_piper,
-                    daemon=True,
-                ).start()
+                self.messages.put(
+                    (
+                        "text",
+                        "System",
+                        "Piper was not found. Voice features are unavailable.",
+                    )
+                )
+                self.messages.put(
+                    ("state", "Piper not found")
+                )
+                return
 
         except Exception as exc:
             self.piper_path = None
@@ -4967,59 +5105,47 @@ class VantaApp:
                     f"Piper detection failed: {exc}",
                 )
             )
+            return
 
-        if not self.piper_path:
+        self.messages.put(
+            ("state", "Piper ready")
+        )
+
+        self.messages.put(
+            ("state", "Finding voice…")
+        )
+
+        try:
+            self.voice_model = find_voice_model(
+                self.piper_path
+            )
+        except Exception as exc:
+            self.voice_model = None
+
             self.messages.put(
                 (
                     "text",
                     "System",
-                    "Piper was not found. Install Piper or make "
-                    "piper.exe available on this PC.",
+                    f"Voice detection failed: {exc}",
                 )
             )
+
+        if self.voice_model:
             self.messages.put(
-                ("state", "Whisper ready")
+                ("state", "Voice ready")
+            )
+
+            self.messages.put(
+                ("state", "Listening")
             )
         else:
             self.messages.put(
-                ("state", "Piper ready")
+                (
+                    "text",
+                    "System",
+                    f"Could not find {PIPER_MODEL_NAME}.",
+                )
             )
-            self.messages.put(
-                ("state", "Finding voice…")
-            )
-
-            try:
-                self.voice_model = find_voice_model(
-                    self.piper_path
-                )
-            except Exception as exc:
-                self.voice_model = None
-                self.messages.put(
-                    (
-                        "text",
-                        "System",
-                        f"Voice detection failed: {exc}",
-                    )
-                )
-
-            if self.voice_model:
-                self.messages.put(
-                    ("state", "Voice ready")
-                )
-                self.messages.put(
-                    ("state", "Listening")
-                )
-            else:
-                self.messages.put(
-                    (
-                        "text",
-                        "System",
-                        f"Could not find {PIPER_MODEL_NAME}.",
-                    )
-                )
-                self.messages.put(
-                    ("state", "Whisper ready")
-                )
 
         if self.running:
             threading.Thread(
