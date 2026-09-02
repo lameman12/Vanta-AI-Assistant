@@ -18,6 +18,7 @@ import urllib.request
 import uuid
 import pyautogui
 import pyperclip
+import uuid
 import re
 from datetime import datetime
 from pathlib import Path
@@ -26,5 +27,6 @@ from PIL import Image, ImageTk
 import sys
 import numpy as np
 import requests
+import unicodedata
 import sounddevice as sd
 from pycaw.pycaw import AudioUtilities
