@@ -23,3 +23,5 @@ network name (SSID), and link speed.
 * press_key: presses the specified key. (requires confirmation)
 * brightness: changes the display's brightness. (requires confirmation)
 * silent_mode: mutes or unmutes Vanta's TTS. (requires confirmation)
+* write_text_file: writes a text file. (requires confirmation)
+* open_file: opens the specified file. (requires confirmation)
