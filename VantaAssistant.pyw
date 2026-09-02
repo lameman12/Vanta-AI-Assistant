@@ -181,11 +181,16 @@ with text, HTML, XML, Markdown, or other markup.
 - Never put unescaped double quotes inside a JSON string.
 - Do not unnecessarily mention or explain previous actions.
 - Every action must be based only on the user's current request.
+- Never claim that the user said something they did not say.
+- If the current user request is missing information required to perform an action, ask the user directly for that information.
+- Never write "User:", "Vanta:", "Assistant:", or similar speaker labels in your response.
+- Never roleplay, simulate, invent, or recreate a conversation between "User" and "Vanta".
+- Do not repeat the same answer or sentence over and over again unless the user asks you to.
 - For normal conversation, questions, greetings, jokes, or general discussion, respond naturally with NO <ACTION> block.
 - Example:
   User: "Can you hear me?"
   Response: "Yes, I can hear you."
-
+  
 Supported actions:
 - open_url: open a web URL.
 
@@ -402,6 +407,22 @@ User: "Lock my PC."
 {"action":"lock_pc"}
 </ACTION>
 
+- write_text_file: create a plain text file in the user's Windows Downloads folder. This requires confirmation.  
+Use "filename" for the file name and "text" for the exact text to write. 
+The file is always saved to the user's Downloads folder. Do not provide a full path. Do not use this action to write passwords, API keys, tokens, credentials, or other secrets.
+Only use write_text_file when the user explicitly asks you to create, write, save, or make a text file. Do not infer a file-writing request from normal conversation.
+Do NOT just write text files if the user asks you to, ask them what they want to write.
+
+Example:
+
+User: "Write a text file called shopping-list.txt with milk, eggs, and bread."
+
+Your response to that action should be:
+
+<ACTION>
+{"action":"write_text_file","filename":"shopping-list.txt","text":"milk\n eggs\n bread"}
+</ACTION>
+
 For computer actions, you MUST output the complete action block.
 Never output only "<ACTION>".
 
@@ -484,6 +505,43 @@ Assistant: I'll show system info.
 {"action":"shell","command":"systeminfo"}
 </ACTION>
 
+- open_file: open or run a local file on the user's Windows PC. This requires confirmation.
+
+Use "path", "file", "filename", or "name" for the file.
+
+If the user gives only a filename, let the desktop application search for it. It can find exact or similar filenames.
+
+If the user asks to open or run the file with a specific program, use "with", "runner", "program", or "application" for the requested program.
+
+For example, use "python" for .py files when the user asks to run them with Python.
+
+For normal files such as .txt, .pdf, .png, .jpg, .docx, and .xlsx, do not specify a program unless the user asks for one.
+
+Use open_file instead of shell when the user asks to open or run a local file.
+
+If the user does not provide enough information to identify the file, ask which file they mean.
+
+Examples:
+
+User: "Open shopping-list.txt"
+<ACTION>
+{"action":"open_file","filename":"shopping-list.txt"}
+</ACTION>
+
+User: "Open my shopping list"
+<ACTION>
+{"action":"open_file","filename":"shopping-list.txt"}
+</ACTION>
+
+User: "Run myscript.py with Python"
+<ACTION>
+{"action":"open_file","filename":"myscript.py","with":"python"}
+</ACTION>
+
+User: "Open report.pdf"
+<ACTION>
+{"action":"open_file","filename":"report.pdf"}
+</ACTION>
 
 - type_text: type text into the currently focused application; this requires confirmation, Use "text" as the JSON property containing the exact text to type. This is a COMPUTER ACTION. When the user asks you to type, enter, write,
   paste, or input specific text into the currently focused application,
@@ -585,6 +643,8 @@ You are limited to one command at a time and you cannot start trying to do multi
 Do not say things such as "that's a lot of information", "regarding the previous command", "the previous action showed", or similar unless the user is specifically asking about that action result.
 
 Use the information internally to understand whether the previous action succeeded, failed, or was declined.
+
+Do not try to repeat the same action if the action you tried returns that they declined, only repeat the action if they specifically ask you to.
 
 For example, if you receive:
 
@@ -2031,6 +2091,1058 @@ def execute_action(action, root, mic_callback, app=None):
                 f"Could not launch application: {exc}"
             )
 
+    if name == "open_file":
+        requested = str(
+            action.get("path")
+            or action.get("file")
+            or action.get("filename")
+            or action.get("name")
+            or ""
+        ).strip()
+
+        runner = str(
+            action.get("with")
+            or action.get("runner")
+            or action.get("program")
+            or action.get("application")
+            or ""
+        ).strip()
+
+        if not requested:
+            return "No file supplied."
+
+        try:
+            def normalize_name(value):
+                value = os.path.basename(
+                    os.path.normpath(
+                        str(value)
+                    )
+                )
+
+                value = value.lower().strip()
+
+                if "." in value:
+                    value = os.path.splitext(
+                        value
+                    )[0]
+
+                return "".join(
+                    character
+                    for character in value
+                    if character.isalnum()
+                    or character in (
+                        " ",
+                        "_",
+                        "-",
+                    )
+                ).strip()
+
+            def normalize_full_name(value):
+                value = str(value).lower().strip()
+
+                return "".join(
+                    character
+                    for character in value
+                    if character.isalnum()
+                    or character in (
+                        " ",
+                        "_",
+                        "-",
+                        ".",
+                    )
+                ).strip()
+
+            def score_candidate(
+                requested_name,
+                candidate_path,
+            ):
+                candidate_name = os.path.basename(
+                    candidate_path
+                )
+
+                requested_full = (
+                    normalize_full_name(
+                        requested_name
+                    )
+                )
+
+                candidate_full = (
+                    normalize_full_name(
+                        candidate_name
+                    )
+                )
+
+                requested_base = normalize_name(
+                    requested_name
+                )
+
+                candidate_base = normalize_name(
+                    candidate_name
+                )
+
+                if not requested_full:
+                    return 0.0
+
+                if requested_full == candidate_full:
+                    return 1.0
+
+                if requested_base and (
+                    requested_base
+                    == candidate_base
+                ):
+                    return 0.98
+
+                ratio_full = (
+                    difflib.SequenceMatcher(
+                        None,
+                        requested_full,
+                        candidate_full,
+                    ).ratio()
+                )
+
+                ratio_base = (
+                    difflib.SequenceMatcher(
+                        None,
+                        requested_base,
+                        candidate_base,
+                    ).ratio()
+                    if requested_base
+                    and candidate_base
+                    else 0.0
+                )
+
+                requested_words = set(
+                    requested_base.split()
+                )
+
+                candidate_words = set(
+                    candidate_base.split()
+                )
+
+                word_score = 0.0
+
+                if requested_words:
+                    overlap = (
+                        requested_words.intersection(
+                            candidate_words
+                        )
+                    )
+
+                    word_score = (
+                        len(overlap)
+                        / len(requested_words)
+                    )
+
+                substring_score = 0.0
+
+                if (
+                    requested_full
+                    and requested_full
+                    in candidate_full
+                ):
+                    substring_score = 0.94
+
+                if (
+                    requested_base
+                    and requested_base
+                    in candidate_base
+                ):
+                    substring_score = max(
+                        substring_score,
+                        0.96,
+                    )
+
+                return max(
+                    ratio_full,
+                    ratio_base,
+                    word_score,
+                    substring_score,
+                )
+
+            def is_probably_file(path):
+                try:
+                    return (
+                        os.path.isfile(path)
+                        and not os.path.islink(path)
+                    )
+                except OSError:
+                    return False
+
+            def collect_drives():
+                drives = []
+
+                for letter in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+                    drive = f"{letter}:\\"
+
+                    if os.path.isdir(drive):
+                        drives.append(drive)
+
+                return drives
+
+            def search_paths(requested_name):
+                matches = []
+                seen = set()
+
+                requested_base = os.path.basename(
+                    requested_name
+                )
+
+                requested_lower = (
+                    requested_base.lower()
+                )
+
+                preferred_locations = [
+                    os.path.join(
+                        os.path.expanduser("~"),
+                        "Downloads",
+                    ),
+                    os.path.join(
+                        os.path.expanduser("~"),
+                        "Desktop",
+                    ),
+                    os.path.join(
+                        os.path.expanduser("~"),
+                        "Documents",
+                    ),
+                    os.path.join(
+                        os.path.expanduser("~"),
+                        "Pictures",
+                    ),
+                    os.path.join(
+                        os.path.expanduser("~"),
+                        "Videos",
+                    ),
+                    os.path.join(
+                        os.path.expanduser("~"),
+                        "Music",
+                    ),
+                    os.path.expanduser("~"),
+                    os.environ.get(
+                        "TEMP",
+                        "",
+                    ),
+                ]
+
+                for base_path in preferred_locations:
+                    if not base_path:
+                        continue
+
+                    if not os.path.isdir(base_path):
+                        continue
+
+                    try:
+                        for root_dir, dirs, files in os.walk(
+                            base_path,
+                            topdown=True,
+                        ):
+                            dirs[:] = [
+                                directory
+                                for directory in dirs
+                                if directory.lower()
+                                not in {
+                                    "node_modules",
+                                    ".git",
+                                    "__pycache__",
+                                    ".cache",
+                                    "cache",
+                                }
+                            ]
+
+                            for filename in files:
+                                if (
+                                    requested_lower
+                                    == filename.lower()
+                                ):
+                                    path = os.path.abspath(
+                                        os.path.join(
+                                            root_dir,
+                                            filename,
+                                        )
+                                    )
+
+                                    key = os.path.normcase(
+                                        path
+                                    )
+
+                                    if key not in seen:
+                                        seen.add(key)
+                                        matches.append(path)
+
+                    except (
+                        OSError,
+                        PermissionError,
+                    ):
+                        continue
+
+                if matches:
+                    return matches
+
+                drives = collect_drives()
+
+                excluded_roots = {
+                    os.path.normcase(
+                        os.path.join(
+                            os.environ.get(
+                                "SystemRoot",
+                                r"C:\Windows",
+                            ),
+                        )
+                    ),
+                    os.path.normcase(
+                        os.path.join(
+                            os.environ.get(
+                                "ProgramFiles",
+                                r"C:\Program Files",
+                            ),
+                        )
+                    ),
+                    os.path.normcase(
+                        os.path.join(
+                            os.environ.get(
+                                "ProgramFiles(x86)",
+                                r"C:\Program Files (x86)",
+                            ),
+                        )
+                    ),
+                }
+
+                for drive in drives:
+                    try:
+                        for root_dir, dirs, files in os.walk(
+                            drive,
+                            topdown=True,
+                        ):
+                            normalized_root = (
+                                os.path.normcase(
+                                    os.path.abspath(
+                                        root_dir
+                                    )
+                                )
+                            )
+
+                            dirs[:] = [
+                                directory
+                                for directory in dirs
+                                if os.path.normcase(
+                                    os.path.join(
+                                        normalized_root,
+                                        directory,
+                                    )
+                                )
+                                not in excluded_roots
+                                and directory.lower()
+                                not in {
+                                    "$recycle.bin",
+                                    "system volume information",
+                                    "windows.old",
+                                    "node_modules",
+                                    ".git",
+                                    "__pycache__",
+                                }
+                            ]
+
+                            for filename in files:
+                                if (
+                                    requested_lower
+                                    == filename.lower()
+                                ):
+                                    path = os.path.abspath(
+                                        os.path.join(
+                                            root_dir,
+                                            filename,
+                                        )
+                                    )
+
+                                    key = os.path.normcase(
+                                        path
+                                    )
+
+                                    if key not in seen:
+                                        seen.add(key)
+                                        matches.append(path)
+
+                    except (
+                        OSError,
+                        PermissionError,
+                    ):
+                        continue
+
+                return matches
+
+            def fuzzy_search(requested_name):
+                candidates = []
+                seen = set()
+
+                preferred_locations = [
+                    os.path.join(
+                        os.path.expanduser("~"),
+                        "Downloads",
+                    ),
+                    os.path.join(
+                        os.path.expanduser("~"),
+                        "Desktop",
+                    ),
+                    os.path.join(
+                        os.path.expanduser("~"),
+                        "Documents",
+                    ),
+                    os.path.expanduser("~"),
+                ]
+
+                for base_path in preferred_locations:
+                    if not os.path.isdir(base_path):
+                        continue
+
+                    try:
+                        for root_dir, dirs, files in os.walk(
+                            base_path,
+                            topdown=True,
+                        ):
+                            dirs[:] = [
+                                directory
+                                for directory in dirs
+                                if directory.lower()
+                                not in {
+                                    "node_modules",
+                                    ".git",
+                                    "__pycache__",
+                                    ".cache",
+                                    "cache",
+                                }
+                            ]
+
+                            for filename in files:
+                                path = os.path.abspath(
+                                    os.path.join(
+                                        root_dir,
+                                        filename,
+                                    )
+                                )
+
+                                key = os.path.normcase(
+                                    path
+                                )
+
+                                if key in seen:
+                                    continue
+
+                                seen.add(key)
+
+                                score = score_candidate(
+                                    requested_name,
+                                    path,
+                                )
+
+                                if score >= 0.55:
+                                    candidates.append(
+                                        (
+                                            score,
+                                            path,
+                                        )
+                                    )
+
+                    except (
+                        OSError,
+                        PermissionError,
+                    ):
+                        continue
+
+                if not candidates:
+                    for drive in collect_drives():
+                        try:
+                            for root_dir, dirs, files in os.walk(
+                                drive,
+                                topdown=True,
+                            ):
+                                dirs[:] = [
+                                    directory
+                                    for directory in dirs
+                                    if directory.lower()
+                                    not in {
+                                        "$recycle.bin",
+                                        "system volume information",
+                                        "windows.old",
+                                        "node_modules",
+                                        ".git",
+                                        "__pycache__",
+                                    }
+                                ]
+
+                                for filename in files:
+                                    path = os.path.abspath(
+                                        os.path.join(
+                                            root_dir,
+                                            filename,
+                                        )
+                                    )
+
+                                    key = os.path.normcase(
+                                        path
+                                    )
+
+                                    if key in seen:
+                                        continue
+
+                                    seen.add(key)
+
+                                    score = score_candidate(
+                                        requested_name,
+                                        path,
+                                    )
+
+                                    if score >= 0.55:
+                                        candidates.append(
+                                            (
+                                                score,
+                                                path,
+                                            )
+                                        )
+
+                        except (
+                            OSError,
+                            PermissionError,
+                        ):
+                            continue
+
+                candidates.sort(
+                    key=lambda item: item[0],
+                    reverse=True,
+                )
+
+                return candidates[:10]
+
+            def resolve_runner(
+                runner_name,
+                target_path,
+            ):
+                if not runner_name:
+                    return None
+
+                requested_runner = (
+                    runner_name.lower().strip()
+                )
+
+                extension = (
+                    os.path.splitext(
+                        target_path
+                    )[1]
+                    .lower()
+                )
+
+                aliases = {
+                    "python": [
+                        "python",
+                        "python.exe",
+                        "python3",
+                        "python3.exe",
+                        "py",
+                        "py.exe",
+                    ],
+                    "pythonw": [
+                        "pythonw",
+                        "pythonw.exe",
+                        "pyw",
+                        "pyw.exe",
+                    ],
+                    "powershell": [
+                        "powershell",
+                        "powershell.exe",
+                        "pwsh",
+                        "pwsh.exe",
+                    ],
+                    "cmd": [
+                        "cmd",
+                        "cmd.exe",
+                        "command prompt",
+                    ],
+                    "node": [
+                        "node",
+                        "node.exe",
+                    ],
+                    "java": [
+                        "java",
+                        "java.exe",
+                    ],
+                }
+
+                runner_command = None
+
+                for key, values in aliases.items():
+                    if requested_runner in values:
+                        runner_command = key
+                        break
+
+                if runner_command:
+                    if (
+                        runner_command
+                        in {
+                            "python",
+                            "pythonw",
+                        }
+                    ):
+                        if extension == ".py":
+                            candidates = (
+                                ["python"]
+                                if runner_command
+                                == "python"
+                                else ["pythonw"]
+                            )
+
+                            if (
+                                shutil.which(
+                                    candidates[0]
+                                )
+                                is None
+                            ):
+                                candidates = [
+                                    "py"
+                                ]
+
+                            executable = shutil.which(
+                                candidates[0]
+                            )
+
+                            if executable:
+                                return [
+                                    executable,
+                                    target_path,
+                                ]
+
+                        if extension == ".pyw":
+                            candidates = [
+                                "pythonw",
+                                "pyw",
+                                "python",
+                            ]
+
+                            for candidate in candidates:
+                                executable = (
+                                    shutil.which(
+                                        candidate
+                                    )
+                                )
+
+                                if executable:
+                                    return [
+                                        executable,
+                                        target_path,
+                                    ]
+
+                    if runner_command == "powershell":
+                        executable = (
+                            shutil.which(
+                                "pwsh"
+                            )
+                            or shutil.which(
+                                "powershell"
+                            )
+                        )
+
+                        if executable:
+                            return [
+                                executable,
+                                "-File",
+                                target_path,
+                            ]
+
+                    if runner_command == "cmd":
+                        executable = shutil.which(
+                            "cmd"
+                        )
+
+                        if executable:
+                            return [
+                                executable,
+                                "/c",
+                                target_path,
+                            ]
+
+                    if runner_command == "node":
+                        executable = shutil.which(
+                            "node"
+                        )
+
+                        if executable:
+                            return [
+                                executable,
+                                target_path,
+                            ]
+
+                    if runner_command == "java":
+                        executable = shutil.which(
+                            "java"
+                        )
+
+                        if executable:
+                            return [
+                                executable,
+                                target_path,
+                            ]
+
+                explicit_runner = runner_name.strip()
+
+                if os.path.isfile(
+                    explicit_runner
+                ):
+                    return [
+                        explicit_runner,
+                        target_path,
+                    ]
+
+                executable = shutil.which(
+                    explicit_runner
+                )
+
+                if executable:
+                    return [
+                        executable,
+                        target_path,
+                    ]
+
+                return None
+
+            target_path = None
+
+            expanded_requested = os.path.expandvars(
+                os.path.expanduser(
+                    requested
+                )
+            )
+
+            if (
+                os.path.isabs(
+                    expanded_requested
+                )
+                and is_probably_file(
+                    expanded_requested
+                )
+            ):
+                target_path = os.path.abspath(
+                    expanded_requested
+                )
+
+            elif is_probably_file(
+                expanded_requested
+            ):
+                target_path = os.path.abspath(
+                    expanded_requested
+                )
+
+            else:
+                if os.path.dirname(
+                    expanded_requested
+                ):
+                    possible_path = os.path.abspath(
+                        expanded_requested
+                    )
+
+                    if is_probably_file(
+                        possible_path
+                    ):
+                        target_path = possible_path
+
+                if target_path is None:
+                    exact_matches = search_paths(
+                        requested
+                    )
+
+                    if exact_matches:
+                        if len(
+                            exact_matches
+                        ) == 1:
+                            target_path = (
+                                exact_matches[0]
+                            )
+                        else:
+                            scored = [
+                                (
+                                    score_candidate(
+                                        requested,
+                                        path,
+                                    ),
+                                    path,
+                                )
+                                for path in exact_matches
+                            ]
+
+                            scored.sort(
+                                key=lambda item: item[0],
+                                reverse=True,
+                            )
+
+                            if (
+                                scored
+                                and scored[0][0]
+                                >= 0.80
+                            ):
+                                target_path = (
+                                    scored[0][1]
+                                )
+
+                if target_path is None:
+                    fuzzy_matches = (
+                        fuzzy_search(
+                            requested
+                        )
+                    )
+
+                    if not fuzzy_matches:
+                        return (
+                            f"Could not find a file "
+                            f"similar to '{requested}'."
+                        )
+
+                    best_score, best_path = (
+                        fuzzy_matches[0]
+                    )
+
+                    if best_score < 0.55:
+                        return (
+                            f"Could not find a file "
+                            f"similar to '{requested}'."
+                        )
+
+                    if best_score < 0.85:
+                        if not ask_local_confirmation(
+                            root,
+                            "Vanta found a similar file",
+                            f"Requested:\n\n"
+                            f"{requested}\n\n"
+                            f"Closest match:\n\n"
+                            f"{best_path}\n\n"
+                            f"Open this file?",
+                        ):
+                            return (
+                                "User declined opening "
+                                "the similar file."
+                            )
+
+                    target_path = best_path
+
+            if not target_path:
+                return (
+                    f"Could not find '{requested}'."
+                )
+
+            target_path = os.path.abspath(
+                os.path.normpath(
+                    target_path
+                )
+            )
+
+            if not is_probably_file(
+                target_path
+            ):
+                return (
+                    "The selected path is not "
+                    "a valid file."
+                )
+
+            extension = (
+                os.path.splitext(
+                    target_path
+                )[1]
+                .lower()
+            )
+
+            dangerous_script_extensions = {
+                ".bat",
+                ".cmd",
+                ".ps1",
+                ".psm1",
+                ".vbs",
+                ".vbe",
+                ".js",
+                ".jse",
+                ".wsf",
+                ".wsh",
+                ".hta",
+                ".py",
+                ".pyw",
+                ".pyc",
+                ".pyo",
+                ".jar",
+                ".exe",
+                ".com",
+                ".scr",
+                ".msi",
+            }
+
+            if runner:
+                command = resolve_runner(
+                    runner,
+                    target_path,
+                )
+
+                if not command:
+                    return (
+                        f"Could not find a program "
+                        f"to run '{runner}'."
+                    )
+
+                command_display = " ".join(
+                    f'"{part}"'
+                    if " " in str(part)
+                    else str(part)
+                    for part in command
+                )
+
+                if not ask_local_confirmation(
+                    root,
+                    "Vanta wants to open a file",
+                    f"Allow Vanta to run:\n\n"
+                    f"{command_display}",
+                ):
+                    return (
+                        "User declined opening "
+                        "the file."
+                    )
+
+                subprocess.Popen(
+                    command,
+                    shell=False,
+                    creationflags=(
+                        subprocess.CREATE_NO_WINDOW
+                        if extension
+                        in {
+                            ".py",
+                            ".pyw",
+                            ".ps1",
+                            ".bat",
+                            ".cmd",
+                            ".vbs",
+                            ".js",
+                        }
+                        else 0
+                    ),
+                )
+
+                return (
+                    f"Opened {os.path.basename(target_path)} "
+                    f"with {runner}."
+                )
+
+            if extension in dangerous_script_extensions:
+                if extension in {
+                    ".py",
+                    ".pyw",
+                }:
+                    python_executable = (
+                        shutil.which(
+                            "python"
+                        )
+                        or shutil.which(
+                            "py"
+                        )
+                    )
+
+                    pythonw_executable = (
+                        shutil.which(
+                            "pythonw"
+                        )
+                        or shutil.which(
+                            "pyw"
+                        )
+                    )
+
+                    if extension == ".pyw":
+                        suggested_runner = (
+                            pythonw_executable
+                            or python_executable
+                        )
+                    else:
+                        suggested_runner = (
+                            python_executable
+                        )
+
+                    if suggested_runner:
+                        if not ask_local_confirmation(
+                            root,
+                            "Vanta wants to run a Python file",
+                            f"File:\n\n"
+                            f"{target_path}\n\n"
+                            f"Python:\n\n"
+                            f"{suggested_runner}\n\n"
+                            f"Allow Vanta to run this file?",
+                        ):
+                            return (
+                                "User declined running "
+                                "the Python file."
+                            )
+
+                        subprocess.Popen(
+                            [
+                                suggested_runner,
+                                target_path,
+                            ],
+                            shell=False,
+                            creationflags=(
+                                subprocess.CREATE_NO_WINDOW
+                            ),
+                        )
+
+                        return (
+                            f"Ran "
+                            f"{os.path.basename(target_path)} "
+                            f"with Python."
+                        )
+
+                if not ask_local_confirmation(
+                    root,
+                    "Vanta wants to open a file",
+                    f"File:\n\n"
+                    f"{target_path}\n\n"
+                    f"This file may execute code.\n\n"
+                    f"Allow Vanta to open it?",
+                ):
+                    return (
+                        "User declined opening "
+                        "the file."
+                    )
+
+            else:
+                if not ask_local_confirmation(
+                    root,
+                    "Vanta wants to open a file",
+                    f"Allow Vanta to open:\n\n"
+                    f"{target_path}",
+                ):
+                    return (
+                        "User declined opening "
+                        "the file."
+                    )
+
+            os.startfile(
+                target_path
+            )
+
+            return (
+                f"Opened "
+                f"{os.path.basename(target_path)}."
+            )
+
+        except FileNotFoundError:
+            return (
+                f"Could not find the file "
+                f"'{requested}'."
+            )
+
+        except PermissionError:
+            return (
+                "Vanta does not have permission "
+                "to open that file."
+            )
+
+        except OSError as exc:
+            return (
+                f"Could not open the file: {exc}"
+            )
+
+        except Exception as exc:
+            return (
+                f"Could not open the file: {exc}"
+            )
+
     if name == "close_app":
         program = str(
             action.get("program")
@@ -2607,6 +3719,107 @@ def execute_action(action, root, mic_callback, app=None):
             return (
                 f"Could not check RAM usage: "
                 f"{exc}"
+            )
+
+    if name in (
+        "write_text_file",
+        "create_text_file",
+        "write_txt_file",
+    ):
+        filename = str(
+            action.get("filename", "")
+        ).strip()
+
+        text = str(
+            action.get("text", "")
+        )
+
+        if not filename:
+            return "No filename supplied."
+
+        if (
+            os.path.basename(filename) != filename
+            or "/" in filename
+            or "\\" in filename
+        ):
+            return (
+                "Blocked: the filename must be a simple "
+                "file name without a directory path."
+            )
+
+        if not filename.lower().endswith(".txt"):
+            filename += ".txt"
+
+        downloads = os.path.join(
+            os.path.expanduser("~"),
+            "Downloads",
+        )
+
+        try:
+            os.makedirs(
+                downloads,
+                exist_ok=True,
+            )
+
+            file_path = os.path.abspath(
+                os.path.join(
+                    downloads,
+                    filename,
+                )
+            )
+
+            downloads_path = os.path.abspath(
+                downloads
+            )
+
+            if os.path.commonpath(
+                [downloads_path, file_path]
+            ) != downloads_path:
+                return (
+                    "Blocked: file must be saved "
+                    "inside the Downloads folder."
+                )
+
+            if not ask_local_confirmation(
+                root,
+                "Vanta wants to create a text file",
+                "Allow Vanta to create this file in "
+                "your Downloads folder?\n\n"
+                f"File:\n{filename}\n\n"
+                "The file will be opened automatically "
+                "in Notepad.",
+            ):
+                return "User declined creating the text file."
+
+            with open(
+                file_path,
+                "w",
+                encoding="utf-8",
+                newline="",
+            ) as file:
+                file.write(text)
+
+            subprocess.Popen(
+                [
+                    "notepad.exe",
+                    file_path,
+                ],
+                shell=False,
+            )
+
+            return (
+                f"Created {filename} in the Downloads "
+                "folder and opened it in Notepad."
+            )
+
+        except OSError as exc:
+            return (
+                f"Could not create the text file: {exc}"
+            )
+
+        except Exception as exc:
+            return (
+                f"Could not create the text file: {exc}"
             )
 
     if name in (
@@ -7321,29 +8534,393 @@ class VantaApp:
                 )
 
     @staticmethod
+    def _repair_json_strings(text):
+        if not text or not isinstance(text, str):
+            return text
+
+        result = []
+        in_string = False
+        escaped = False
+
+        for char in text:
+            if escaped:
+                result.append(char)
+                escaped = False
+                continue
+
+            if char == "\\":
+                result.append(char)
+                escaped = True
+                continue
+
+            if char == '"':
+                result.append(char)
+                in_string = not in_string
+                continue
+
+            if in_string:
+                if char == "\n":
+                    result.append("\\n")
+                    continue
+
+                if char == "\r":
+                    result.append("\\r")
+                    continue
+
+                if char == "\t":
+                    result.append("\\t")
+                    continue
+
+                if ord(char) < 32:
+                    result.append(
+                        "\\u{:04x}".format(ord(char))
+                    )
+                    continue
+
+            result.append(char)
+
+        return "".join(result)
+
+    @staticmethod
+    def _remove_trailing_json_commas(text):
+        if not text or not isinstance(text, str):
+            return text
+
+        result = []
+        in_string = False
+        escaped = False
+        index = 0
+
+        while index < len(text):
+            char = text[index]
+
+            if escaped:
+                result.append(char)
+                escaped = False
+                index += 1
+                continue
+
+            if char == "\\":
+                result.append(char)
+                escaped = True
+                index += 1
+                continue
+
+            if char == '"':
+                result.append(char)
+                in_string = not in_string
+                index += 1
+                continue
+
+            if not in_string and char == ",":
+                lookahead = index + 1
+
+                while (
+                    lookahead < len(text)
+                    and text[lookahead].isspace()
+                ):
+                    lookahead += 1
+
+                if (
+                    lookahead < len(text)
+                    and text[lookahead] in "}]"
+                ):
+                    index += 1
+                    continue
+
+            result.append(char)
+            index += 1
+
+        return "".join(result)
+
+    @staticmethod
+    def _extract_json_objects(text):
+        if not text or not isinstance(text, str):
+            return []
+
+        objects = []
+        start = None
+        depth = 0
+        in_string = False
+        escaped = False
+
+        for index, char in enumerate(text):
+            if escaped:
+                escaped = False
+                continue
+
+            if char == "\\":
+                escaped = True
+                continue
+
+            if char == '"':
+                in_string = not in_string
+                continue
+
+            if in_string:
+                continue
+
+            if char == "{":
+                if depth == 0:
+                    start = index
+
+                depth += 1
+                continue
+
+            if char == "}":
+                if depth <= 0:
+                    continue
+
+                depth -= 1
+
+                if depth == 0 and start is not None:
+                    candidate = text[start:index + 1].strip()
+
+                    if candidate:
+                        objects.append(candidate)
+
+                    start = None
+
+        return objects
+
+    @staticmethod
+    def _strip_code_fence(text):
+        if not text or not isinstance(text, str):
+            return text
+
+        cleaned = text.strip()
+
+        if cleaned.startswith("```"):
+            lines = cleaned.splitlines()
+
+            if lines:
+                lines = lines[1:]
+
+            while lines and not lines[-1].strip():
+                lines.pop()
+
+            if lines and lines[-1].strip() == "```":
+                lines.pop()
+
+            cleaned = "\n".join(lines).strip()
+
+        return cleaned
+
+    @staticmethod
+    def _strip_json_prefix(text):
+        if not text or not isinstance(text, str):
+            return text
+
+        cleaned = text.strip()
+
+        prefixes = (
+            "json\n",
+            "json\r\n",
+            "json ",
+            "JSON\n",
+            "JSON\r\n",
+            "JSON ",
+        )
+
+        for prefix in prefixes:
+            if cleaned.startswith(prefix):
+                return cleaned[len(prefix):].strip()
+
+        return cleaned
+
+    @staticmethod
+    def _normalize_action_candidate(text):
+        if not text or not isinstance(text, str):
+            return ""
+
+        cleaned = (
+            text.replace("\ufeff", "")
+            .replace("\u200b", "")
+            .replace("\u200c", "")
+            .replace("\u200d", "")
+            .strip()
+        )
+
+        cleaned = VantaApp._strip_code_fence(cleaned)
+        cleaned = VantaApp._strip_json_prefix(cleaned)
+
+        return cleaned.strip()
+
+    @staticmethod
+    def _parse_action_json(text):
+        if not text or not isinstance(text, str):
+            return None
+
+        candidates = []
+        normalized = (
+            text.replace("\ufeff", "")
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .strip()
+        )
+
+        if normalized:
+            candidates.append(normalized)
+
+        stripped = VantaApp._normalize_action_candidate(
+            normalized
+        )
+
+        if stripped and stripped not in candidates:
+            candidates.append(stripped)
+
+        extracted = VantaApp._extract_json_objects(
+            normalized
+        )
+
+        for candidate in extracted:
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
+
+        for candidate in list(candidates):
+            repaired = VantaApp._repair_json_strings(
+                candidate
+            )
+
+            if repaired and repaired not in candidates:
+                candidates.append(repaired)
+
+            repaired_commas = (
+                VantaApp._remove_trailing_json_commas(
+                    repaired
+                )
+            )
+
+            if (
+                repaired_commas
+                and repaired_commas not in candidates
+            ):
+                candidates.append(repaired_commas)
+
+        for candidate in candidates:
+            candidate = candidate.strip()
+
+            if not candidate:
+                continue
+
+            try:
+                action = json.loads(candidate)
+
+                if isinstance(action, dict):
+                    return action
+
+            except (
+                json.JSONDecodeError,
+                TypeError,
+                ValueError,
+            ):
+                pass
+
+        for candidate in candidates:
+            repaired = VantaApp._repair_json_strings(
+                candidate
+            )
+
+            repaired = (
+                VantaApp._remove_trailing_json_commas(
+                    repaired
+                )
+            )
+
+            try:
+                decoder = json.JSONDecoder()
+                action, _ = decoder.raw_decode(
+                    repaired.lstrip()
+                )
+
+                if isinstance(action, dict):
+                    return action
+
+            except (
+                json.JSONDecodeError,
+                TypeError,
+                ValueError,
+            ):
+                pass
+
+        for candidate in candidates:
+            candidate = candidate.strip()
+
+            if not (
+                candidate.startswith("{")
+                and candidate.endswith("}")
+            ):
+                continue
+
+            python_candidate = (
+                VantaApp._repair_json_strings(candidate)
+            )
+
+            python_candidate = (
+                VantaApp._remove_trailing_json_commas(
+                    python_candidate
+                )
+            )
+
+            try:
+                import ast
+
+                action = ast.literal_eval(
+                    python_candidate
+                )
+
+                if isinstance(action, dict):
+                    return action
+
+            except (
+                SyntaxError,
+                ValueError,
+                TypeError,
+                MemoryError,
+                RecursionError,
+            ):
+                pass
+
+        return None
+
+    @staticmethod
     def _extract_action(reply):
         if not reply or not isinstance(reply, str):
             return None
 
-        normalized = reply.replace("\ufeff", "").strip()
+        normalized = (
+            reply.replace("\ufeff", "")
+            .replace("\u200b", "")
+            .replace("\u200c", "")
+            .replace("\u200d", "")
+            .strip()
+        )
 
-        patterns = [
+        tag_pairs = [
             ("<ACTION>", "</ACTION>"),
             ("<action>", "</action>"),
-            ("[ACTION]", "[/ACTION]"),
-            ("[action]", "[/action]"),
-            ("[ACTION>", "</ACTION>"),
-            ("[action>", "</action>"),
+            ("<Action>", "</Action>"),
             ("<ACTION>", "[/ACTION]"),
             ("[ACTION]", "</ACTION>"),
+            ("[ACTION]", "[/ACTION]"),
+            ("[action]", "[/action]"),
+            ("[Action]", "[/Action]"),
+            ("[ACTION>", "</ACTION>"),
+            ("[action>", "</action>"),
+            ("<ACTION>", ""),
+            ("<action>", ""),
+            ("[ACTION]", ""),
+            ("[action]", ""),
+            ("[ACTION>", ""),
+            ("[action>", ""),
         ]
 
         candidates = []
 
-        for start_tag, end_tag in patterns:
+        for start_tag, end_tag in tag_pairs:
             search_from = 0
 
-            while True:
+            while search_from < len(normalized):
                 start = normalized.find(
                     start_tag,
                     search_from,
@@ -7352,64 +8929,62 @@ class VantaApp:
                 if start == -1:
                     break
 
-                end = normalized.find(
-                    end_tag,
-                    start + len(start_tag),
+                content_start = (
+                    start + len(start_tag)
                 )
 
-                if end == -1:
-                    break
+                if end_tag:
+                    end = normalized.find(
+                        end_tag,
+                        content_start,
+                    )
 
-                raw = normalized[
-                    start + len(start_tag):end
-                ].strip()
+                    if end == -1:
+                        search_from = content_start
+                        continue
+
+                    raw = normalized[
+                        content_start:end
+                    ].strip()
+
+                    search_from = (
+                        end + len(end_tag)
+                    )
+                else:
+                    raw = normalized[
+                        content_start:
+                    ].strip()
+
+                    search_from = len(normalized)
 
                 if raw:
                     candidates.append(raw)
 
-                search_from = (
-                    end + len(end_tag)
-                )
+        if not candidates:
+            extracted = VantaApp._extract_json_objects(
+                normalized
+            )
+
+            if extracted:
+                candidates.extend(extracted)
 
         if not candidates:
             return None
 
         for raw in reversed(candidates):
-            cleaned = raw.strip()
+            cleaned = VantaApp._normalize_action_candidate(
+                raw
+            )
 
-            if cleaned.startswith("```"):
-                lines = cleaned.splitlines()
+            if not cleaned:
+                continue
 
-                if lines:
-                    lines = lines[1:]
+            action = VantaApp._parse_action_json(
+                cleaned
+            )
 
-                if lines and lines[-1].strip() == "```":
-                    lines = lines[:-1]
-
-                cleaned = "\n".join(lines).strip()
-
-            if cleaned.lower().startswith("json"):
-                cleaned = cleaned[4:].strip()
-
-            try:
-                action = json.loads(cleaned)
-
-                if isinstance(action, dict):
-                    return action
-
-            except json.JSONDecodeError:
-                pass
-
-            if cleaned.startswith("{") and cleaned.endswith("}"):
-                try:
-                    decoder = json.JSONDecoder()
-                    action, _ = decoder.raw_decode(cleaned)
-
-                    if isinstance(action, dict):
-                        return action
-
-                except json.JSONDecodeError:
-                    pass
+            if isinstance(action, dict):
+                return action
 
         return None
 
