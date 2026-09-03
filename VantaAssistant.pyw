@@ -24,6 +24,7 @@ from pathlib import Path
 from tkinter import filedialog
 from PIL import Image, ImageTk
 import unicodedata
+import ctypes
 import sys
 
 import numpy as np
@@ -32,6 +33,13 @@ import sounddevice as sd
 
 AI_URL = "https://evil-poppy-hardiness.ngrok-free.dev/chat"
 TRANSCRIBE_URL = "https://evil-poppy-hardiness.ngrok-free.dev/transcribe"
+
+VANTA_VERSION = "1.21"
+
+GITHUB_LATEST_RELEASE_API = (
+    "https://api.github.com/repos/"
+    "lameman12/Vanta-AI-Assistant/releases/latest"
+)
 
 APP_DATA_DIR = (
     Path.home()
@@ -4871,6 +4879,125 @@ class VantaApp:
 
             return f"Could not play music: {exc}"
 
+    def parse_version(self, version):
+        version = str(version or "").strip().lower()
+
+        if version.startswith("v"):
+            version = version[1:]
+
+        parts = version.split(".")
+
+        numbers = []
+
+        for part in parts[:3]:
+            digits = ""
+
+            for char in part:
+                if char.isdigit():
+                    digits += char
+                else:
+                    break
+
+            numbers.append(int(digits) if digits else 0)
+
+        while len(numbers) < 3:
+            numbers.append(0)
+
+        return tuple(numbers)
+    
+
+    def check_for_updates(self):
+        try:
+            response = requests.get(
+                GITHUB_LATEST_RELEASE_API,
+                headers={
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "Vanta-AI-Assistant"
+                },
+                timeout=10
+            )
+
+            if not response.ok:
+                print(
+                    f"Version check failed: "
+                    f"GitHub HTTP {response.status_code}",
+                    flush=True
+                )
+                return
+
+            data = response.json()
+
+            latest_version = str(
+                data.get("tag_name") or ""
+            ).strip()
+
+            release_url = str(
+                data.get("html_url") or
+                "https://github.com/lameman12/Vanta-AI-Assistant/releases"
+            ).strip()
+
+            if not latest_version:
+                print(
+                    "Version check failed: no release version found",
+                    flush=True
+                )
+                return
+
+            current = self.parse_version(
+                VANTA_VERSION
+            )
+
+            latest = self.parse_version(
+                latest_version
+            )
+
+            print(
+                f"Vanta version: {VANTA_VERSION} | "
+                f"Latest version: {latest_version}",
+                flush=True
+            )
+
+            if latest <= current:
+                return
+
+            message = (
+                "Your version of Vanta is outdated.\n\n"
+                f"Installed version: {VANTA_VERSION}\n"
+                f"Latest version: {latest_version}\n\n"
+                "Please update Vanta from GitHub."
+            )
+
+            result = ctypes.windll.user32.MessageBoxW(
+                0,
+                message,
+                "Vanta Update Available",
+                0x00000040
+            )
+
+            if result == 1:
+                try:
+                    os.startfile(
+                        release_url
+                    )
+
+                except Exception as e:
+                    print(
+                        f"Could not open update page: {e}",
+                        flush=True
+                    )
+
+        except requests.RequestException as e:
+            print(
+                f"Version check network error: {e}",
+                flush=True
+            )
+
+        except Exception as e:
+            print(
+                f"Version check error: {e}",
+                flush=True
+            )
+
     def format_message(
         self,
         text,
@@ -9292,4 +9419,6 @@ class VantaApp:
         self.root.mainloop()
 
 if __name__ == "__main__":
-    VantaApp().run()
+    app = VantaApp()
+    app.root.after(500, lambda: app.check_for_updates())
+    app.run()
