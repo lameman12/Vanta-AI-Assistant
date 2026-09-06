@@ -23,6 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog
 from PIL import Image, ImageTk
+import platform
 import unicodedata
 import ctypes
 import sys
@@ -34,7 +35,7 @@ import sounddevice as sd
 AI_URL = "https://evil-poppy-hardiness.ngrok-free.dev/chat"
 TRANSCRIBE_URL = "https://evil-poppy-hardiness.ngrok-free.dev/transcribe"
 
-VANTA_VERSION = "1.21"
+VANTA_VERSION = "1.22"
 
 GITHUB_LATEST_RELEASE_API = (
     "https://api.github.com/repos/"
@@ -54,7 +55,7 @@ API_KEY_FILE = (
 )
 
 USER_ID = getpass.getuser()
-PLATFORM = "Windows"
+PLATFORM = platform.system()
 BOT_NAME = "Vanta"
 
 MUSIC_URLS = {
