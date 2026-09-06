@@ -12,6 +12,7 @@ import tkinter as tk
 import tkinter.messagebox as messagebox
 import webbrowser
 import math
+import platform
 import winsound
 import getpass
 import urllib.request
